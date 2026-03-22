@@ -1,0 +1,108 @@
+import { Command } from 'commander';
+import inquirer from 'inquirer';
+import path from 'path';
+
+import { FileManager } from '../../core/file-manager';
+import { PluginManager } from '../../core/plugin-manager';
+import { RemotePluginLoader } from '../../core/remote-plugin-loader';
+import { logger } from '../../utils/logger';
+import { handleError, AppError } from '../../utils/error-handler';
+
+export const addCommand = new Command('add')
+  .description('Add a feature to existing project')
+  .argument('[feature]', 'Feature to add')
+  .option('-p, --project-path <path>', 'Project path', '.')
+  .option('--from <source>', 'Remote plugin source (e.g. github:user/repo)')
+  .action(
+    async (
+      feature: string | undefined,
+      options: { projectPath: string; from?: string }
+    ) => {
+      try {
+        const fileManager = new FileManager();
+        const pluginManager = new PluginManager();
+        const remoteLoader = new RemotePluginLoader();
+
+        const projectPath = path.resolve(options.projectPath);
+
+        // ✅ Validate project
+        const packageJsonPath = path.join(projectPath, 'package.json');
+        if (!(await fileManager.exists(packageJsonPath))) {
+          throw new AppError('Not a valid Node.js project', 'INVALID_PROJECT');
+        }
+
+        // 🔥 REMOTE PLUGIN FLOW
+        if (options.from) {
+          if (!feature) {
+            throw new AppError(
+              'Feature name required for remote plugin',
+              'INVALID_FEATURE'
+            );
+          }
+
+          if (!options.from.startsWith('github:')) {
+            throw new AppError(
+              'Only github source supported (github:user/repo)',
+              'INVALID_SOURCE'
+            );
+          }
+
+          const repo = options.from.replace('github:', '');
+
+          const plugin = await remoteLoader.loadFromGitHub(repo);
+
+          await plugin.apply(projectPath);
+
+          logger.success(`Remote plugin "${plugin.name}" added!`);
+          return;
+        }
+
+        // ✅ LOCAL PLUGIN FLOW
+        await pluginManager.loadPlugins();
+        const plugins = pluginManager.getAllPlugins();
+
+        // 🔥 Support: forge add github:user/repo
+        if (feature && feature.startsWith('github:')) {
+          options.from = feature;
+          feature = undefined;
+        }
+
+        if (!feature) {
+          const { selected } = await inquirer.prompt([
+            {
+              type: 'list',
+              name: 'selected',
+              message: 'Select a feature to add:',
+              choices: plugins.map((p) => ({
+                name: `${p.name} - ${p.description}`,
+                value: p.name,
+              })),
+            },
+          ]);
+
+          feature = selected;
+        }
+
+        const finalFeature = feature;
+
+        if (!finalFeature) {
+          throw new AppError('Feature is required', 'INVALID_FEATURE');
+        }
+
+        const plugin = pluginManager.getPlugin(finalFeature);
+
+        if (!plugin) {
+          throw new AppError(
+            `Feature "${finalFeature}" not found`,
+            'INVALID_FEATURE'
+          );
+        }
+
+        await plugin.apply(projectPath);
+
+        logger.success(`Successfully added ${plugin.name}!`);
+      } catch (error) {
+        handleError(error);
+      }
+    }
+  );

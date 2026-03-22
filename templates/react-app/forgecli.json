@@ -1,0 +1,6 @@
+{
+  "name": "react-app",
+  "description": "React application with TypeScript",
+  "placeholders": ["APP_NAME", "CURRENT_YEAR", "AUTHOR"],
+  "features": ["testing", "docker", "eslint", "prettier"]
+}
