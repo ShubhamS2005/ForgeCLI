@@ -3,10 +3,10 @@ import inquirer from 'inquirer';
 import path from 'path';
 import { Dirent } from 'fs';
 
-import { TemplateEngine } from '../../core/template-engine';
-import { FileManager } from '../../core/file-manager';
-import { logger } from '../../utils/logger';
-import { handleError, AppError } from '../../utils/error-handler';
+import { TemplateEngine } from '../../core/template-engine.js';
+import { FileManager } from '../../core/file-manager.js';
+import { logger } from '../../utils/logger.js';
+import { handleError, AppError } from '../../utils/error-handler.js';
 
 export const createCommand = new Command('create')
   .description('Create a new application from a template')

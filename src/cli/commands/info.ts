@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 
-import { TemplateEngine } from '../../core/template-engine';
-import { logger } from '../../utils/logger';
-import { handleError, AppError } from '../../utils/error-handler';
+import { TemplateEngine } from '../../core/template-engine.js';
+import { logger } from '../../utils/logger.js';
+import { handleError, AppError } from '../../utils/error-handler.js';
 
 export const infoCommand = new Command('info')
   .description('Show detailed information about a template')

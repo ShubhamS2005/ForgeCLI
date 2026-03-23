@@ -1,10 +1,10 @@
 import { Command } from 'commander';
-import { createCommand } from './commands/create';
-import { addCommand } from './commands/add';
-import { logger } from '../utils/logger';
-import { handleError } from '../utils/error-handler';
-import { listCommand } from './commands/list';
-import { infoCommand } from './commands/info';
+import { createCommand } from './commands/create.js';
+import { addCommand } from './commands/add.js';
+import { logger } from '../utils/logger.js';
+import { handleError } from '../utils/error-handler.js';
+import { listCommand } from './commands/list.js';
+import { infoCommand } from './commands/info.js';
 
 // Create main program
 const program = new Command();

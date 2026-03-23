@@ -11,6 +11,7 @@
     "test": "jest",
     "lint": "eslint src --ext .ts"
   },
+  "type": "module",
   "dependencies": {
     "chalk": "^4.1.2",
     "commander": "^11.0.0",

@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import path from 'path';
 
-import { TemplateEngine } from '../../core/template-engine';
-import { logger } from '../../utils/logger';
-import { handleError } from '../../utils/error-handler';
+import { TemplateEngine } from '../../core/template-engine.js';
+import { logger } from '../../utils/logger.js';
+import { handleError } from '../../utils/error-handler.js';
 
 export const listCommand = new Command('list')
   .description('List all available templates')

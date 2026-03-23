@@ -2,11 +2,11 @@ import { Command } from 'commander';
 import inquirer from 'inquirer';
 import path from 'path';
 
-import { FileManager } from '../../core/file-manager';
-import { PluginManager } from '../../core/plugin-manager';
-import { RemotePluginLoader } from '../../core/remote-plugin-loader';
-import { logger } from '../../utils/logger';
-import { handleError, AppError } from '../../utils/error-handler';
+import { FileManager } from '../../core/file-manager.js';
+import { PluginManager } from '../../core/plugin-manager.js';
+import { RemotePluginLoader } from '../../core/remote-plugin-loader.js';
+import { logger } from '../../utils/logger.js';
+import { handleError, AppError } from '../../utils/error-handler.js';
 
 export const addCommand = new Command('add')
   .description('Add a feature to existing project')

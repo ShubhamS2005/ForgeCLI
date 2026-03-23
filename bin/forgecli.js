@@ -6,4 +6,4 @@
  */
 
 // Import and run the CLI
-require('../dist/cli/index.js');
+import '../dist/cli/index.js';

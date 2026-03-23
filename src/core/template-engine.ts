@@ -1,9 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { execSync } from 'child_process';
-import { TemplateConfig, ScaffoldOptions } from '../types';
-import { FileManager } from './file-manager';
-import { logger } from '../utils/logger';
+import { TemplateConfig, ScaffoldOptions } from '../types/index.js';
+import { FileManager } from './file-manager.js';
+import { logger } from '../utils/logger.js';
 
 export interface ReplacementMap {
   [key: string]: string;
