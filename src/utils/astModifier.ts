@@ -10,7 +10,7 @@ const generate = (generateModule as any).default || generateModule;
 export function modifyReactFile(
   content: string,
   providerName: string,
-  importPath: string
+  importPath: string,
 ) {
   const ast = parse(content, {
     sourceType: "module",
@@ -18,7 +18,7 @@ export function modifyReactFile(
   });
 
   let hasImport = false;
-  let isWrapped = false;
+  let alreadyHasProvider = false;
 
   traverse(ast, {
     ImportDeclaration(path: NodePath<ImportDeclaration>) {
@@ -26,45 +26,68 @@ export function modifyReactFile(
         hasImport = true;
       }
     },
+  });
 
+  traverse(ast, {
     JSXElement(path: NodePath<JSXElement>) {
       const opening = path.node.openingElement;
 
+      // ✅ Already has provider
       if (
         t.isJSXIdentifier(opening.name) &&
         opening.name.name === providerName
       ) {
-        isWrapped = true;
+        alreadyHasProvider = true;
       }
 
-      if (
-        t.isJSXIdentifier(opening.name) &&
-        opening.name.name === "App"
-      ) {
-        if (!isWrapped) {
-          const wrapped = t.jsxElement(
-            t.jsxOpeningElement(t.jsxIdentifier(providerName), [], false),
-            t.jsxClosingElement(t.jsxIdentifier(providerName)),
-            [path.node],
-            false
-          );
+      // 🔥 Find <App />
+      if (t.isJSXIdentifier(opening.name) && opening.name.name === "App") {
+        if (alreadyHasProvider) return;
 
-          path.replaceWith(wrapped);
-          isWrapped = true;
-        }
+        const wrapped = t.jsxElement(
+          t.jsxOpeningElement(t.jsxIdentifier(providerName), [], false),
+          t.jsxClosingElement(t.jsxIdentifier(providerName)),
+          [path.node], // ✅ NOW SAFE
+          false,
+        );
+
+        path.replaceWith(wrapped);
+        alreadyHasProvider = true;
       }
     },
   });
 
+  // 🔥 SECOND PASS — wrap entire tree if needed
+  if (!alreadyHasProvider) {
+    traverse(ast, {
+      JSXElement(path: NodePath<JSXElement>) {
+        const opening = path.node.openingElement;
+
+        if (t.isJSXIdentifier(opening.name) && opening.name.name === "App") {
+          const wrapped = t.jsxElement(
+            t.jsxOpeningElement(t.jsxIdentifier(providerName), [], false),
+            t.jsxClosingElement(t.jsxIdentifier(providerName)),
+            [path.node],
+            false,
+          );
+
+          path.replaceWith(wrapped);
+          alreadyHasProvider = true;
+        }
+      },
+    });
+  }
+
+  // 🔥 ADD IMPORT
   if (!hasImport) {
     const importDecl = t.importDeclaration(
       [
         t.importSpecifier(
           t.identifier(providerName),
-          t.identifier(providerName)
+          t.identifier(providerName),
         ),
       ],
-      t.stringLiteral(importPath)
+      t.stringLiteral(importPath),
     );
 
     ast.program.body.unshift(importDecl);
