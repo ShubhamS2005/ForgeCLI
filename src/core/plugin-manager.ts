@@ -1,7 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
 import { Plugin } from "../types/index.js";
-
+import {modifyReactFile} from '../utils/astModifier.js'
 /**
  * Handles runtime-loaded plugins (old system upgraded)
  */
@@ -157,69 +157,36 @@ export async function applyModifications(
       let content = await fs.readFile(filePath, "utf-8");
 
       // =========================
-      //  IMPORT INJECTION
+      // 🔥 AST-BASED WRAP + IMPORT
       // =========================
-      if (rule.import) {
-        const importStatement = `import { ${rule.import.name} } from "${rule.import.path}";`;
+      if (rule.type === "wrap" && rule.with && rule.import) {
+        const updated = modifyReactFile(
+          content,
+          rule.import.name,   // AuthProvider
+          rule.import.path    // ./providers/AuthProvider
+        );
 
-        if (!content.includes(importStatement)) {
-          // insert after last import
-          const importRegex = /(import .* from .*;\n)/g;
+        await fs.writeFile(filePath, updated, "utf-8");
 
-          let lastImport;
-          let match;
-
-          while ((match = importRegex.exec(content)) !== null) {
-            lastImport = match;
-          }
-
-          if (lastImport) {
-            const insertPos = lastImport.index + lastImport[0].length;
-            content =
-              content.slice(0, insertPos) +
-              importStatement +
-              "\n" +
-              content.slice(insertPos);
-          } else {
-            content = importStatement + "\n" + content;
-          }
-
-          console.log(`[MODIFIED] Added import in ${rule.file}`);
-        }
+        console.log(`[AST] Modified ${rule.file}`);
+        continue;
       }
 
       // =========================
-      //  WRAP
+      //  APPEND / PREPEND (KEEP OLD)
       // =========================
-      if (rule.type === "wrap" && rule.with) {
-        const appRegex = /<App\b[^>]*\/>/;
-        const alreadyWrappedRegex = new RegExp(
-          `<${rule.with}>[\\s\\S]*<App\\b[^>]*\\/>[\\s\\S]*<\\/${rule.with}>`,
-        );
+      if (rule.type === "append" && rule.content) {
+        content += "\n" + rule.content;
+        console.log(`[MODIFIED] Appended content in ${rule.file}`);
+      }
 
-        if (alreadyWrappedRegex.test(content)) {
-          console.log(`[SKIP] Already wrapped in ${rule.with}`);
-        } else {
-          const match = content.match(appRegex);
-
-          if (!match) {
-            console.log(`[WARN] Target not found in ${rule.file}`);
-            continue;
-          }
-
-          const original = match[0];
-
-          const wrapped = `<${rule.with}>
-  ${original}
-</${rule.with}>`;
-
-          content = content.replace(appRegex, wrapped);
-
-          console.log(`[MODIFIED] Wrapped App in ${rule.file}`);
-        }
+      if (rule.type === "prepend" && rule.content) {
+        content = rule.content + "\n" + content;
+        console.log(`[MODIFIED] Prepended content in ${rule.file}`);
       }
 
       await fs.writeFile(filePath, content, "utf-8");
+
     } catch (err) {
       console.log(`[ERROR] Failed modifying ${rule.file}`);
     }
