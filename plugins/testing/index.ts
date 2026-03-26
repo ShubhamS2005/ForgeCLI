@@ -1,6 +1,6 @@
 import path from 'path';
-import { Plugin } from '../../types/index.js';
-import { FileManager } from '../../core/file-manager.js';
+import { Plugin } from '../../src/types/index.js';
+import { FileManager } from '../../src/core/file-manager.js';
 
 const plugin: Plugin = {
   name: 'testing',
