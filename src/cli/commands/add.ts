@@ -8,6 +8,7 @@ import {
   PluginResolver,
   loadPluginConfig,
   copyPluginFiles,
+  applyModifications,
 } from "../../core/plugin-manager.js";
 import { RemotePluginLoader } from "../../core/remote-plugin-loader.js";
 import { logger } from "../../utils/logger.js";
@@ -94,6 +95,10 @@ export const addCommand = new Command("add")
                 pluginConfig.files,
                 replacements,
               );
+            }
+
+            if (pluginConfig.modify) {
+              await applyModifications(projectPath, pluginConfig.modify);
             }
 
             logger.success(
