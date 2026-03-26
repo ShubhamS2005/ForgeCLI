@@ -1,9 +1,9 @@
-import fs from 'fs/promises';
-import path from 'path';
-import { execSync } from 'child_process';
-import { TemplateConfig, ScaffoldOptions } from '../types/index.js';
-import { FileManager } from './file-manager.js';
-import { logger } from '../utils/logger.js';
+import fs from "fs/promises";
+import path from "path";
+import { execSync } from "child_process";
+import { TemplateConfig, ScaffoldOptions } from "../types/index.js";
+import { FileManager } from "./file-manager.js";
+import { logger } from "../utils/logger.js";
 
 export interface ReplacementMap {
   [key: string]: string;
@@ -13,29 +13,34 @@ export class TemplateEngine {
   private fileManager: FileManager;
   private templatesDir: string;
 
-  constructor(templatesDir: string = path.resolve(process.cwd(), 'templates')) {
-    this.fileManager = new FileManager();
-    this.templatesDir = templatesDir;
-  }
+  constructor() {
+  this.fileManager = new FileManager();
+
+  this.templatesDir = path.resolve(process.cwd(), 'templates');
+}
 
   /**
    * Load template configuration
    */
   async loadTemplateConfig(templateName: string): Promise<TemplateConfig> {
-    const configPath = path.join(this.templatesDir, templateName, 'forgecli.json');
+    const configPath = path.join(
+      this.templatesDir,
+      templateName,
+      "forgecli.json",
+    );
 
     try {
-      const configData = await fs.readFile(configPath, 'utf-8');
+      const configData = await fs.readFile(configPath, "utf-8");
       const config = JSON.parse(configData);
 
       if (!config.name) {
-        throw new Error('Template must have a name');
+        throw new Error("Template must have a name");
       }
 
       return config;
     } catch {
       throw new Error(
-        `Template "${templateName}" not found or invalid. Make sure forgecli.json exists.`
+        `Template "${templateName}" not found or invalid. Make sure forgecli.json exists.`,
       );
     }
   }
@@ -45,10 +50,12 @@ export class TemplateEngine {
    */
   async getAvailableTemplates(): Promise<string[]> {
     try {
-      const entries = await fs.readdir(this.templatesDir, { withFileTypes: true });
+      const entries = await fs.readdir(this.templatesDir, {
+        withFileTypes: true,
+      });
       return entries
-        .filter(entry => entry.isDirectory())
-        .map(entry => entry.name)
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name)
         .sort();
     } catch {
       return [];
@@ -71,21 +78,21 @@ export class TemplateEngine {
     const replacementMap: ReplacementMap = {
       APP_NAME: appName,
       CURRENT_YEAR: new Date().getFullYear().toString(),
-      AUTHOR: process.env.USER || process.env.USERNAME || 'Developer',
-      ...options.replacements
+      AUTHOR: process.env.USER || process.env.USERNAME || "Developer",
+      ...options.replacements,
     };
 
     await this.processTemplateDirectory(templateDir, targetDir, replacementMap);
 
     // ✅ Auto install dependencies
     try {
-      logger.info('Installing dependencies...');
-      execSync('npm install', {
+      logger.info("Installing dependencies...");
+      execSync("npm install", {
         cwd: targetDir,
-        stdio: 'inherit'
+        stdio: "inherit",
       });
     } catch {
-      logger.warn('npm install failed. Run it manually.');
+      logger.warn("npm install failed. Run it manually.");
     }
 
     logger.success(`Successfully created ${appName}!`);
@@ -97,22 +104,26 @@ export class TemplateEngine {
   private async processTemplateDirectory(
     sourceDir: string,
     targetDir: string,
-    replacementMap: ReplacementMap
+    replacementMap: ReplacementMap,
   ): Promise<void> {
     const entries = await fs.readdir(sourceDir, { withFileTypes: true });
 
     for (const entry of entries) {
       // ✅ Ignore unwanted folders
-      if (['node_modules', '.git'].includes(entry.name)) continue;
+      if (["node_modules", ".git"].includes(entry.name)) continue;
 
       const sourcePath = path.join(sourceDir, entry.name);
 
-      if (entry.name === 'forgecli.json') continue;
+      if (entry.name === "forgecli.json") continue;
 
       if (entry.isDirectory()) {
         const newTargetDir = path.join(targetDir, entry.name);
         await this.fileManager.createDirectory(newTargetDir);
-        await this.processTemplateDirectory(sourcePath, newTargetDir, replacementMap);
+        await this.processTemplateDirectory(
+          sourcePath,
+          newTargetDir,
+          replacementMap,
+        );
       } else {
         await this.processTemplateFile(sourcePath, targetDir, replacementMap);
       }
@@ -125,20 +136,35 @@ export class TemplateEngine {
   private async processTemplateFile(
     sourcePath: string,
     targetDir: string,
-    replacementMap: ReplacementMap
+    replacementMap: ReplacementMap,
   ): Promise<void> {
     let fileName = path.basename(sourcePath);
 
     // ✅ Handle gitignore
-    if (fileName === 'gitignore') fileName = '.gitignore';
+    if (fileName === "gitignore") fileName = ".gitignore";
 
     fileName = this.replacePlaceholders(fileName, replacementMap);
     const targetPath = path.join(targetDir, fileName);
 
-    const isTextFile = /\.(ts|js|json|html|css|md|txt|tsx|jsx)$/.test(sourcePath);
+    const textExtensions = [
+      ".ts",
+      ".js",
+      ".json",
+      ".html",
+      ".css",
+      ".md",
+      ".txt",
+      ".tsx",
+      ".jsx",
+      ".env",
+      ".yml",
+      ".yaml",
+    ];
+
+    const isTextFile = textExtensions.some((ext) => sourcePath.endsWith(ext));
 
     if (isTextFile) {
-      let content = await fs.readFile(sourcePath, 'utf-8');
+      let content = await fs.readFile(sourcePath, "utf-8");
       content = this.replacePlaceholders(content, replacementMap);
       await this.fileManager.writeFile(targetPath, content);
     } else {
@@ -154,10 +180,10 @@ export class TemplateEngine {
    */
   private replacePlaceholders(
     content: string,
-    replacementMap: ReplacementMap
+    replacementMap: ReplacementMap,
   ): string {
-    return content.replace(/\{\{(.*?)\}\}/g, (_, key) => {
-      return replacementMap[key] !== undefined ? replacementMap[key] : `{{${key}}}`;
+    return content.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
+      return replacementMap[key] ?? "";
     });
   }
 
@@ -168,7 +194,7 @@ export class TemplateEngine {
     templateName: string,
     filePath: string,
     targetPath: string,
-    replacements: ReplacementMap = {}
+    replacements: ReplacementMap = {},
   ): Promise<void> {
     const templateDir = path.join(this.templatesDir, templateName);
     const sourcePath = path.join(templateDir, filePath);
@@ -179,10 +205,12 @@ export class TemplateEngine {
       throw new Error(`Template file not found: ${filePath}`);
     }
 
-    const isTextFile = /\.(ts|js|json|html|css|md|txt|tsx|jsx)$/.test(sourcePath);
+    const isTextFile = /\.(ts|js|json|html|css|md|txt|tsx|jsx)$/.test(
+      sourcePath,
+    );
 
     if (isTextFile) {
-      let content = await fs.readFile(sourcePath, 'utf-8');
+      let content = await fs.readFile(sourcePath, "utf-8");
       content = this.replacePlaceholders(content, replacements);
       await this.fileManager.writeFile(targetPath, content);
     } else {
@@ -199,7 +227,11 @@ export class TemplateEngine {
   async validateTemplate(templateName: string): Promise<boolean> {
     try {
       const templateDir = path.join(this.templatesDir, templateName);
-      await fs.access(templateDir);
+      const requiredFiles = ["index.html", "package.json"];
+
+      for (const file of requiredFiles) {
+        await fs.access(path.join(templateDir, file));
+      }
 
       await this.loadTemplateConfig(templateName);
 

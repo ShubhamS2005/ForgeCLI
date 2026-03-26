@@ -5,6 +5,7 @@ import { logger } from '../utils/logger.js';
 import { handleError } from '../utils/error-handler.js';
 import { listCommand } from './commands/list.js';
 import { infoCommand } from './commands/info.js';
+import {installPlugin} from "./commands/install.js"
 
 // Create main program
 const program = new Command();
@@ -20,6 +21,17 @@ program.addCommand(createCommand);
 program.addCommand(addCommand);
 program.addCommand(listCommand);
 program.addCommand(infoCommand);
+
+program
+  .command('install <pluginName>')
+  .description('Install a plugin into the project')
+  .action(async (pluginName) => {
+    try {
+      await installPlugin(pluginName);
+    } catch (error) {
+      handleError(error);
+    }
+  });
 
 // Global error handling
 program.exitOverride();

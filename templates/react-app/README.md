@@ -1,4 +1,4 @@
-# {{APP_NAME}}
+# {"{{APP_NAME}}"}
 
 > Built with ForgeCLI on {{CURRENT_YEAR}}
 

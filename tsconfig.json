@@ -11,6 +11,7 @@
 
     "strict": true,
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
 
@@ -19,6 +20,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
+
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]

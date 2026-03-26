@@ -1,0 +1,19 @@
+{
+  "name": "auth",
+  "version": "1.0.0",
+  "files": [
+    {
+      "from": "files/AuthProvider.tsx",
+      "to": "src/providers/AuthProvider.tsx"
+    }
+  ],
+  "dependencies": ["axios"],
+  "modify": [
+    {
+      "file": "src/main.tsx",
+      "type": "wrap",
+      "target": "<App />",
+      "with": "<AuthProvider>{target}</AuthProvider>"
+    }
+  ]
+}
