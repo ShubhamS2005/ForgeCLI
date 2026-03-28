@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { Plugin } from "../types/index.js";
-import {modifyReactFile} from '../utils/astModifier.js'
+import { rebuildProviderTree } from "../utils/rebuildProviiders.js";
+
 /**
  * Handles runtime-loaded plugins (old system upgraded)
  */
@@ -18,7 +19,6 @@ export class PluginManager {
         const pluginEntry = path.join(pluginsDir, folder, "index.js");
 
         try {
-          // check if index.js exists
           await fs.access(pluginEntry);
 
           const mod = await import(pluginEntry);
@@ -26,12 +26,11 @@ export class PluginManager {
 
           this.plugins.set(plugin.name, plugin);
         } catch {
-          // skip invalid plugin folders
           continue;
         }
       }
     } catch {
-      // plugins folder may not exist → ignore
+      // ignore
     }
   }
 
@@ -45,7 +44,7 @@ export class PluginManager {
 }
 
 /**
- * 🔥 NEW: Plugin Resolver (for .forge plugins)
+ * Plugin Resolver
  */
 export class PluginResolver {
   async resolve(pluginName: string, projectRoot: string): Promise<string> {
@@ -56,23 +55,34 @@ export class PluginResolver {
       return localPath;
     } catch {
       throw new Error(
-        `Plugin "${pluginName}" not found in ${path.join(projectRoot, ".forge/plugins")}`,
+        `Plugin "${pluginName}" not found in ${path.join(projectRoot, ".forge/plugins")}`
       );
     }
   }
 }
 
 /**
- * 🔥 NEW: Plugin Config Interface
+ * Plugin Config Interface
  */
 export interface PluginConfig {
   name: string;
   version: string;
+  priority?: number;
+
   files?: {
     from: string;
     to: string;
   }[];
+
   dependencies?: string[];
+
+  // ✅ NEW (ADD THIS)
+  provider?: {
+    wrapper: string;
+    importName: string;
+    importPath: string;
+  };
+
   modify?: {
     file: string;
     type: "wrap" | "append" | "prepend";
@@ -87,10 +97,10 @@ export interface PluginConfig {
 }
 
 /**
- * 🔥 Load plugin.json
+ * Load plugin.json
  */
 export async function loadPluginConfig(
-  pluginPath: string,
+  pluginPath: string
 ): Promise<PluginConfig> {
   const configPath = path.join(pluginPath, "plugin.json");
 
@@ -109,19 +119,18 @@ export async function loadPluginConfig(
 }
 
 /**
- * 🔥 Copy plugin files into project
+ * Copy plugin files
  */
 export async function copyPluginFiles(
   pluginPath: string,
   projectPath: string,
   files: { from: string; to: string }[],
-  replacements: Record<string, string> = {},
+  replacements: Record<string, string> = {}
 ) {
   for (const file of files) {
     const sourcePath = path.join(pluginPath, file.from);
     const targetPath = path.join(projectPath, file.to);
 
-    // ensure target directory exists
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
     const isTextFile = /\.(ts|tsx|js|jsx|json|md|css|html)$/.test(sourcePath);
@@ -129,24 +138,31 @@ export async function copyPluginFiles(
     if (isTextFile) {
       let content = await fs.readFile(sourcePath, "utf-8");
 
-      // 🔥 placeholder replacement
       content = content.replace(/\{\{(.*?)\}\}/g, (_, key) => {
         return replacements[key] || `{{${key}}}`;
       });
 
+      try {
+        await fs.access(targetPath);
+        console.log(`Skipped (already exists): ${targetPath}`);
+        continue;
+      } catch {}
+
       await fs.writeFile(targetPath, content, "utf-8");
+      console.log(`Created: ${targetPath}`);
     } else {
       const buffer = await fs.readFile(sourcePath);
       await fs.writeFile(targetPath, buffer);
     }
-
-    console.log(`Created: ${targetPath}`);
   }
 }
 
+/**
+ * Apply NON-WRAP modifications only
+ */
 export async function applyModifications(
   projectPath: string,
-  modifyRules: PluginConfig["modify"],
+  modifyRules: PluginConfig["modify"]
 ) {
   if (!modifyRules) return;
 
@@ -157,38 +173,129 @@ export async function applyModifications(
       let content = await fs.readFile(filePath, "utf-8");
 
       // =========================
-      // 🔥 AST-BASED WRAP + IMPORT
+      // ❌ DISABLED WRAP SYSTEM
       // =========================
-      if (rule.type === "wrap" && rule.with && rule.import) {
-        const updated = modifyReactFile(
-          content,
-          rule.import.name,   // AuthProvider
-          rule.import.path    // ./providers/AuthProvider
+      if (rule.type === "wrap") {
+        console.log(
+          `[SKIP] Wrap "${rule.with}" handled by rebuild system`
         );
-
-        await fs.writeFile(filePath, updated, "utf-8");
-
-        console.log(`[AST] Modified ${rule.file}`);
         continue;
       }
 
       // =========================
-      //  APPEND / PREPEND (KEEP OLD)
+      // ✅ APPEND / PREPEND ONLY
       // =========================
       if (rule.type === "append" && rule.content) {
         content += "\n" + rule.content;
-        console.log(`[MODIFIED] Appended content in ${rule.file}`);
+        console.log(`[MODIFIED] Appended in ${rule.file}`);
       }
 
       if (rule.type === "prepend" && rule.content) {
         content = rule.content + "\n" + content;
-        console.log(`[MODIFIED] Prepended content in ${rule.file}`);
+        console.log(`[MODIFIED] Prepended in ${rule.file}`);
       }
 
       await fs.writeFile(filePath, content, "utf-8");
-
-    } catch (err) {
+    } catch {
       console.log(`[ERROR] Failed modifying ${rule.file}`);
     }
   }
+}
+
+/**
+ * Load ALL .forge plugins
+ */
+export async function loadAllForgePlugins(projectRoot: string) {
+  const pluginsDir = path.join(projectRoot, ".forge", "plugins");
+
+  let folders: string[] = [];
+
+  try {
+    folders = await fs.readdir(pluginsDir);
+  } catch {
+    console.log("[INFO] No .forge plugins found");
+    return [];
+  }
+
+  const plugins: { config: PluginConfig; path: string }[] = [];
+
+  for (const folder of folders) {
+    const pluginPath = path.join(pluginsDir, folder);
+
+    try {
+      const config = await loadPluginConfig(pluginPath);
+
+      plugins.push({
+        config: {
+          ...config,
+          priority: config.priority ?? 0,
+        },
+        path: pluginPath,
+      });
+    } catch {
+      console.log(`[WARN] Skipping invalid plugin: ${folder}`);
+    }
+  }
+
+  plugins.sort((a, b) => (a.config.priority || 0) - (b.config.priority || 0));
+
+  return plugins;
+}
+
+/**
+ * Apply ALL plugins
+ */
+export async function applyAllPlugins(projectPath: string) {
+  const plugins = await loadAllForgePlugins(projectPath);
+
+  if (plugins.length === 0) {
+    console.log("[INFO] No plugins to apply");
+    return;
+  }
+
+  console.log("\n🔌 Applying plugins (priority order):\n");
+
+  for (const { config, path: pluginPath } of plugins) {
+    console.log(`→ ${config.name} (priority: ${config.priority})`);
+
+    const replacements = {
+      APP_NAME: path.basename(projectPath),
+    };
+
+    if (config.files) {
+      await copyPluginFiles(
+        pluginPath,
+        projectPath,
+        config.files,
+        replacements
+      );
+    }
+
+    await applyModifications(projectPath, config.modify);
+  }
+
+  // =========================
+  // 🔥 FINAL REBUILD (ONLY SOURCE OF JSX)
+  // =========================
+  const mainFile = path.join(projectPath, "src/main.tsx");
+
+  try {
+    const content = await fs.readFile(mainFile, "utf-8");
+
+    const updated = rebuildProviderTree(
+      content,
+      plugins.map((p) => p.config)
+    );
+
+    if (updated !== content) {
+      await fs.writeFile(mainFile, updated, "utf-8");
+      console.log("[REBUILD] Provider tree updated with priority");
+    } else {
+      console.log("[REBUILD] No changes needed");
+    }
+  } catch {
+    console.log("[ERROR] Failed rebuilding provider tree");
+  }
+
+  console.log("\n✅ All plugins applied successfully!");
 }
