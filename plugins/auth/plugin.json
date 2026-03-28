@@ -1,19 +1,29 @@
 {
   "name": "auth",
   "version": "1.0.0",
+  "priority": 1,
   "files": [
     {
       "from": "files/AuthProvider.tsx",
       "to": "src/providers/AuthProvider.tsx"
     }
   ],
-  "dependencies": ["axios"],
+  "dependencies": [],
+  "provider": {
+    "wrapper": "AuthProvider",
+    "importName": "AuthProvider",
+    "importPath": "./providers/AuthProvider"
+  },
   "modify": [
     {
       "file": "src/main.tsx",
       "type": "wrap",
       "target": "<App />",
-      "with": "<AuthProvider>{target}</AuthProvider>"
+      "with": "AuthProvider",
+      "import": {
+        "name": "AuthProvider",
+        "path": "./providers/AuthProvider"
+      }
     }
   ]
 }

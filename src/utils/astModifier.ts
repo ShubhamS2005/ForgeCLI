@@ -7,19 +7,68 @@ import { ImportDeclaration, JSXElement } from "@babel/types";
 const traverse = (traverseModule as any).default || traverseModule;
 const generate = (generateModule as any).default || generateModule;
 
+// ✅ Get JSX name safely
+function getJSXName(node: any): string {
+  if (t.isJSXIdentifier(node)) {
+    return node.name;
+  }
+
+  if (t.isJSXMemberExpression(node)) {
+    return `${getJSXName(node.object)}.${getJSXName(node.property)}`;
+  }
+
+  return "";
+}
+
+// ✅ Clean target like "<App />" → "App"
+function cleanTargetName(target: string): string {
+  return target.replace(/[<>\/\s]/g, "");
+}
+
+// ✅ GLOBAL duplicate check
+function hasWrapperGlobal(ast: any, wrapper: string): boolean {
+  let found = false;
+
+  traverse(ast, {
+    JSXElement(path: NodePath<JSXElement>) {
+      const name = getJSXName(path.node.openingElement.name);
+      if (name === wrapper) {
+        found = true;
+        path.stop();
+      }
+    },
+  });
+
+  return found;
+}
+
 export function modifyReactFile(
   content: string,
-  providerName: string,
-  importPath: string,
+  options: {
+    wrapper: string;
+    importName: string;
+    importPath: string;
+    target: string;
+  },
 ) {
+  const { wrapper, importName, importPath, target } = options;
+
   const ast = parse(content, {
     sourceType: "module",
     plugins: ["jsx", "typescript"],
   });
 
-  let hasImport = false;
-  let alreadyHasProvider = false;
+  const cleanTarget = cleanTargetName(target);
 
+  let hasImport = false;
+  let wrapped = false;
+
+  // ✅ 1. Prevent duplicate wrapping
+  if (hasWrapperGlobal(ast, wrapper)) {
+    return content;
+  }
+
+  // ✅ 2. Check import
   traverse(ast, {
     ImportDeclaration(path: NodePath<ImportDeclaration>) {
       if (path.node.source.value === importPath) {
@@ -28,72 +77,42 @@ export function modifyReactFile(
     },
   });
 
+  // ✅ 3. Wrap ONLY target (<App />)
   traverse(ast, {
     JSXElement(path: NodePath<JSXElement>) {
-      const opening = path.node.openingElement;
+      const name = getJSXName(path.node.openingElement.name);
 
-      // ✅ Already has provider
-      if (
-        t.isJSXIdentifier(opening.name) &&
-        opening.name.name === providerName
-      ) {
-        alreadyHasProvider = true;
-      }
-
-      // 🔥 Find <App />
-      if (t.isJSXIdentifier(opening.name) && opening.name.name === "App") {
-        if (alreadyHasProvider) return;
-
-        const wrapped = t.jsxElement(
-          t.jsxOpeningElement(t.jsxIdentifier(providerName), [], false),
-          t.jsxClosingElement(t.jsxIdentifier(providerName)),
-          [path.node], // ✅ NOW SAFE
+      if (name === cleanTarget) {
+        const wrappedNode = t.jsxElement(
+          t.jsxOpeningElement(t.jsxIdentifier(wrapper), [], false),
+          t.jsxClosingElement(t.jsxIdentifier(wrapper)),
+          [path.node],
           false,
         );
 
-        path.replaceWith(wrapped);
-        alreadyHasProvider = true;
+        path.replaceWith(wrappedNode);
+        wrapped = true;
+
+        path.stop();
       }
     },
   });
 
-  // 🔥 SECOND PASS — wrap entire tree if needed
-  if (!alreadyHasProvider) {
-    traverse(ast, {
-      JSXElement(path: NodePath<JSXElement>) {
-        const opening = path.node.openingElement;
-
-        if (t.isJSXIdentifier(opening.name) && opening.name.name === "App") {
-          const wrapped = t.jsxElement(
-            t.jsxOpeningElement(t.jsxIdentifier(providerName), [], false),
-            t.jsxClosingElement(t.jsxIdentifier(providerName)),
-            [path.node],
-            false,
-          );
-
-          path.replaceWith(wrapped);
-          alreadyHasProvider = true;
-        }
-      },
-    });
+  // ❌ If target not found → no change
+  if (!wrapped) {
+    return content;
   }
 
-  // 🔥 ADD IMPORT
+  // ✅ 4. Add import if missing
   if (!hasImport) {
     const importDecl = t.importDeclaration(
-      [
-        t.importSpecifier(
-          t.identifier(providerName),
-          t.identifier(providerName),
-        ),
-      ],
+      [t.importSpecifier(t.identifier(importName), t.identifier(importName))],
       t.stringLiteral(importPath),
     );
 
     ast.program.body.unshift(importDecl);
   }
 
-  const output = generate(ast, {}, content);
-
-  return output.code;
+  // ✅ 5. Generate final code
+  return generate(ast, {}, content).code;
 }

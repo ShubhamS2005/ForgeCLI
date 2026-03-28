@@ -1,16 +1,23 @@
 {
   "name": "theme",
   "version": "1.0.0",
+  "priority": 10,
   "files": [
     {
       "from": "files/ThemeProvider.tsx",
       "to": "src/providers/ThemeProvider.tsx"
     }
   ],
+  "provider": {
+    "wrapper": "ThemeProvider",
+    "importName": "ThemeProvider",
+    "importPath": "./providers/ThemeProvider"
+  },
   "modify": [
     {
       "file": "src/main.tsx",
       "type": "wrap",
+      "target": "<App />",
       "with": "ThemeProvider",
       "import": {
         "name": "ThemeProvider",

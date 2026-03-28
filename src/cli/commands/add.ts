@@ -9,6 +9,7 @@ import {
   loadPluginConfig,
   copyPluginFiles,
   applyModifications,
+  applyAllPlugins,
 } from "../../core/plugin-manager.js";
 import { RemotePluginLoader } from "../../core/remote-plugin-loader.js";
 import { logger } from "../../utils/logger.js";
@@ -78,36 +79,23 @@ export const addCommand = new Command("add")
 
         if (feature) {
           try {
+            // 🔥 Step 1: Validate plugin exists
             const pluginPath = await resolver.resolve(feature, projectPath);
             const pluginConfig = await loadPluginConfig(pluginPath);
 
-            logger.info(`Using local plugin: ${pluginConfig.name}`);
+            logger.info(`Adding plugin: ${pluginConfig.name}`);
 
-            const replacements = {
-              APP_NAME: path.basename(projectPath),
-            };
-
-            // ✅ Phase 2: Copy files
-            if (pluginConfig.files) {
-              await copyPluginFiles(
-                pluginPath,
-                projectPath,
-                pluginConfig.files,
-                replacements,
-              );
-            }
-
-            if (pluginConfig.modify) {
-              await applyModifications(projectPath, pluginConfig.modify);
-            }
+            // 🔥 Step 2: Apply ALL plugins in priority order
+            await applyAllPlugins(projectPath);
 
             logger.success(
-              `Plugin "${pluginConfig.name}" applied successfully`,
+              `Plugin "${pluginConfig.name}" applied with priority system`,
             );
+
             return;
           } catch (err: any) {
             logger.error(`Local plugin failed: ${err.message}`);
-            return; // ❗ STOP here (DO NOT fallback)
+            return; // ❗ STOP here
           }
         }
 
